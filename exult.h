@@ -105,4 +105,44 @@ extern class ShortcutBar_gump *g_shortcutBar;
 extern class KeyboardButton_gump *gkeybb;
 #endif
 
+#ifdef GEKKO
+#include <SDL.h>
+extern void push_keyboard(SDLKey key, bool pressed);
+extern void push_mousemotion(Sint16 *mousecoords);
+extern int Wii_handle_event(SDL_Event *event, Sint16 *mousecoords);
+extern void get_memory();
+
+#define WIIMOTE    0
+#define GCPAD      1
+
+#define WII_BUTTON_A             (0)
+#define WII_BUTTON_B             (1)
+#define WII_BUTTON_1             (2)
+#define WII_BUTTON_2             (3)
+#define WII_BUTTON_MINUS         (4)
+#define WII_BUTTON_PLUS          (5)
+#define WII_BUTTON_HOME          (6)
+#define NUNCHUCK_BUTTON_C        (7)
+#define NUNCHUCK_BUTTON_Z        (8)
+#define GC_BUTTON_A              (0)
+#define GC_BUTTON_B              (1)
+#define GC_BUTTON_X              (2)
+#define GC_BUTTON_Y              (3)
+#define GC_BUTTON_Z              (4)
+#define GC_BUTTON_R              (5)
+#define GC_BUTTON_L              (6)
+#define GC_BUTTON_START          (7)
+#define CLASSIC_BUTTON_A         (9)
+#define CLASSIC_BUTTON_B         (10)
+#define CLASSIC_BUTTON_X         (11)
+#define CLASSIC_BUTTON_Y         (12)
+#define CLASSIC_BUTTON_L         (13)
+#define CLASSIC_BUTTON_R         (14)
+#define CLASSIC_BUTTON_ZL        (15)
+#define CLASSIC_BUTTON_ZR        (16)
+#define CLASSIC_BUTTON_MINUS     (17)
+#define CLASSIC_BUTTON_PLUS      (18)
+#define CLASSIC_BUTTON_HOME      (19)
+#endif
+
 #endif

@@ -482,19 +482,19 @@ expack$(EXEEXT) : tools/expack.o $(FILE_OBJS)
 	$(CXX) $(LDFLAGS) -o $(@) tools/expack.o $(FILE_OBJS)
 
 $(EXULT_FLX): expack$(EXEEXT) $(EXULT_FLX_OBJECTS)
-	expack$(EXEEXT) -i data/flx.in
+	$(SRC)/expack$(EXEEXT) -i data/flx.in
 
 $(EXULT_BG_FLX): expack$(EXEEXT) $(EXULT_BG_FLX_OBJECTS)
-	expack$(EXEEXT) -i data/bg/flx.in
+	$(SRC)/expack$(EXEEXT) -i data/bg/flx.in
 
 $(EXULT_SI_FLX): expack$(EXEEXT) $(EXULT_SI_FLX_OBJECTS)
-	expack$(EXEEXT) -i data/si/flx.in
+	$(SRC)/expack$(EXEEXT) -i data/si/flx.in
 
 $(BG_PAPERDOLL): expack$(EXEEXT) $(EXULT_BG_PAPERDOL_VGA_OBJECTS)
-	expack$(EXEEXT) -i data/bg/bg_paperdol.in
+	$(SRC)/expack$(EXEEXT) -i data/bg/bg_paperdol.in
 
 $(BG_MR_FACES): expack$(EXEEXT) $(EXULT_BG_MR_FACES_VGA_OBJECTS)
-	expack$(EXEEXT) -i data/bg/bg_mr_faces.in
+	$(SRC)/expack$(EXEEXT) -i data/bg/bg_mr_faces.in
 
 cmanip$(EXEEXT) : tools/cmanip.o $(CONF_OBJS) $(FILE_OBJS)
 	$(CXX) $(LDFLAGS) -o $(@) tools/cmanip.o $(CONF_OBJS) $(FILE_OBJS)

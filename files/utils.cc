@@ -56,6 +56,10 @@
 #include <sys/param.h> // for MAXPATHLEN
 #endif
 
+#ifdef GEKKO
+#include <sys/param.h> // for MAXPATHLEN
+#endif
+
 using std::cerr;
 using std::string;
 using std::ios;
@@ -674,6 +678,107 @@ void cleanup_output(const char *prefix) {
 #endif // USE_CONSOLE
 #endif  // WIN32
 
+#ifdef GEKKO
+void File_SplitPath(const char *pSrcFileName, char *pDir, char *pName, char *pExt)
+{
+	char *ptr1, *ptr2;
+
+	// Build pathname
+	ptr1 = strrchr(pSrcFileName, '/');
+	if (ptr1)
+	{
+		strcpy(pName, ptr1+1);
+		memmove(pDir, pSrcFileName, ptr1-pSrcFileName);
+		pDir[ptr1-pSrcFileName] = 0;
+	}
+	else
+	{
+ 		strcpy(pName, pSrcFileName);
+		sprintf(pDir, ".%c", '/');
+	}
+
+	// Build the raw filename
+	if (pExt != NULL)
+	{
+		ptr2 = strrchr(pName+1, '.');
+		if (ptr2)
+		{
+#if 0
+			pName[ptr2-pName] = 0;
+			// Copy the file extension
+			strcpy(pExt, ptr2+1);
+#endif
+			strcpy(pExt, ptr2);
+			pName[ptr2-pName] = 0;
+		}
+		else
+			pExt[0] = 0;
+	}
+}
+
+
+const std::string Get_home();
+
+void redirect_output(const char *prefix) {
+	// Flush the output in case anything is queued
+	fclose(stdout);
+	fclose(stderr);
+
+//	string folderPath = Get_home() + "/";
+	string folderPath = dolpath;
+	folderPath += "/";
+
+	string stdoutPath = folderPath + prefix + "out.txt";
+	const char *stdoutfile = stdoutPath.c_str();
+
+	// Redirect standard input and standard output
+	FILE *newfp = freopen(stdoutfile, "w", stdout);
+	if (newfp == NULL) {
+		// This happens on NT
+#if !defined(stdout)
+		stdout = fopen(stdoutfile, "w");
+#else
+		newfp = fopen(stdoutfile, "w");
+		if (newfp)
+			*stdout = *newfp;
+#endif
+	}
+
+	string stderrPath = folderPath + prefix + "err.txt";
+	const char *stderrfile = stderrPath.c_str();
+
+	newfp = freopen(stderrfile, "w", stderr);
+	if (newfp == NULL) {
+		// This happens on NT
+#if !defined(stderr)
+		stderr = fopen(stderrfile, "w");
+#else
+		newfp = fopen(stderrfile, "w");
+		if (newfp)
+			*stderr = *newfp;
+#endif
+	}
+	setvbuf(stdout, NULL, _IOLBF, BUFSIZ);  // Line buffered
+	setbuf(stderr, NULL);           // No buffering
+}
+
+void cleanup_output(const char *prefix) {
+	string folderPath = dolpath;
+	folderPath += "/";
+
+	if (!ftell(stdout)) {
+		fclose(stdout);
+		string stdoutPath = folderPath + prefix + "out.txt";
+		remove(stdoutPath.c_str());
+	}
+	if (!ftell(stderr)) {
+		fclose(stderr);
+		string stderrPath = folderPath + prefix + "err.txt";
+		remove(stderrPath.c_str());
+	}
+}
+#endif
+
 const string Get_home() {
 	std::string home_dir;
 #ifdef WIN32
@@ -787,7 +892,18 @@ void setup_program_paths() {
 #ifdef WIN32
 	if (get_system_path("<HOME>") != ".")
 #endif
-		add_system_path("<HOME>", home_dir);
+
+#ifdef GEKKO
+	char cwd[MAXPATHLEN];
+	getcwd(cwd, MAXPATHLEN);
+
+	// Default path is /apps/exult. Path is built thanks to argv[0]
+	config_dir += dolpath;
+	savehome_dir += dolpath;
+	gamehome_dir = dolpath;
+#endif
+
+	add_system_path("<HOME>", home_dir);
 	add_system_path("<CONFIG>", config_dir);
 	add_system_path("<SAVEHOME>", savehome_dir);
 	add_system_path("<GAMEHOME>", gamehome_dir);

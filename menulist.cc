@@ -67,6 +67,9 @@ bool MenuEntry::handle_event(SDL_Event &event) {
 	SDL_keysym &key = event.key.keysym;
 	return((event.type == SDL_KEYDOWN &&
 	        (key.sym == SDLK_RETURN || key.sym == SDLK_KP_ENTER)) ||
+#ifdef GEKKO
+(event.type == SDL_JOYBUTTONDOWN && (event.jbutton.button == WII_BUTTON_A || CLASSIC_BUTTON_A)) ||
+#endif
 	       event.type == SDL_MOUSEBUTTONUP);
 }
 
@@ -106,6 +109,9 @@ bool MenuTextEntry::handle_event(SDL_Event &event) {
 	SDL_keysym &key = event.key.keysym;
 	return (((event.type == SDL_KEYDOWN &&
 	          (key.sym == SDLK_RETURN || key.sym == SDLK_KP_ENTER)) ||
+#ifdef GEKKO
+(event.type == SDL_JOYBUTTONDOWN && (event.jbutton.button == WII_BUTTON_A || CLASSIC_BUTTON_A)) ||
+#endif
 	         event.type == SDL_MOUSEBUTTONUP)) && enabled;
 }
 
@@ -176,6 +182,9 @@ bool MenuGameEntry::handle_event(SDL_Event &event) {
 	SDL_keysym &key = event.key.keysym;
 	return (((event.type == SDL_KEYDOWN &&
 	          (key.sym == SDLK_RETURN || key.sym == SDLK_KP_ENTER)) ||
+#ifdef GEKKO
+(event.type == SDL_JOYBUTTONDOWN && (event.jbutton.button == WII_BUTTON_A || CLASSIC_BUTTON_A)) ||
+#endif
 	         event.type == SDL_MOUSEBUTTONUP)) && enabled;
 }
 
@@ -250,6 +259,27 @@ bool MenuTextChoice::handle_event(SDL_Event &event) {
 			break;
 		}
 	}
+#ifdef GEKKO
+	else if(event.type==SDL_JOYHATMOTION) {
+		switch(event.jhat.value) {
+		case SDL_HAT_LEFT:
+			dirty = true;
+			choice--;
+			if(choice<0)
+				choice = choices->size()-1;
+			break;
+		case SDL_HAT_RIGHT:
+			dirty = true;
+		        choice++;
+			if(choice>=choices->size())
+				choice = 0;
+			break;
+		default:
+			break;
+		}
+	}
+#endif
+
 	return false;
 }
 
@@ -305,10 +335,29 @@ void MenuList::set_selection(int x, int y) {
 	selected = false;
 }
 
+#ifdef GEKKO
+static void move_mouse(Sint16 *push)
+{
+	int x, y;
+
+	SDL_GetMouseState(&x, &y);
+	x += push[0] / 3072;
+	y += push[1] / 3072;
+	if (x < 0)
+		x = 0;
+	if (y < 0)
+		y = 0;
+	SDL_WarpMouse(x, y);
+}
+#endif
+
 int MenuList::handle_events(Game_window *gwin, Mouse *mouse) {
 	unsigned char mouse_visible;
 	int count = entries->size();
 	bool exit_loop = false;
+#ifdef GEKKO
+	Sint16 mousecoords[2] = {0, 0};
+#endif
 	//int scale = gwin->get_fastmouse() ? 1 : gwin->get_win()->get_scale();
 	int gx, gy;
 	SDL_Event event;
@@ -343,6 +392,13 @@ int MenuList::handle_events(Game_window *gwin, Mouse *mouse) {
 			gwin->get_win()->show();
 		bool mouse_updated = false;
 		while (SDL_PollEvent(&event)) {
+#ifdef GEKKO
+
+			if (event.type == SDL_JOYAXISMOTION) {
+				if (event.jaxis.axis==2 || event.jaxis.axis==3)
+					Wii_handle_event(&event, &mousecoords[0]);
+			}
+#endif
 			if (event.type == SDL_MOUSEMOTION) {
 				gwin->get_win()->screen_to_game(event.motion.x, event.motion.y, gwin->get_fastmouse(), gx, gy);
 				if (!mouse_updated) mouse->hide();
@@ -417,10 +473,79 @@ int MenuList::handle_events(Game_window *gwin, Mouse *mouse) {
 				}
 				break;
 				}
+
+#ifdef GEKKO
+		} else if(event.type==SDL_JOYBUTTONDOWN) {
+
+			mouse->hide();
+			mouse->blit_dirty();
+			switch(event.jbutton.button) {
+			case WII_BUTTON_A:
+			case CLASSIC_BUTTON_A:
+			{
+				MenuObject *entry = (*entries)[selection];
+				exit_loop = entry->handle_event(event);
+			}
+				break;
+
+			default:
+				{
+					// let key be processed by selected menu-item
+					if(selected) {
+						MenuObject *entry = (*entries)[selection];
+						exit_loop = entry->handle_event(event);
+					}
+				}
+				break;
+			}
+			//*******************
+		} else if(event.type==SDL_JOYHATMOTION) {
+			mouse->hide();
+			mouse->blit_dirty();
+			switch(event.jhat.value) {
+			case SDL_HAT_UP:
+				if (!selected)
+				{
+					// if unselected (by 'MouseOut' event), just re-select
+					set_selection(selection);
+					continue;
+				}
+				if(selection<=0)
+					set_selection(count-1);
+				else
+					set_selection(selection-1);
+				continue;
+			case SDL_HAT_DOWN:
+				if (!selected)
+				{
+					// if unselected (by 'MouseOut' event), just re-select
+					set_selection(selection);
+					continue;
+				}
+				if(selection>=(count-1))
+					set_selection(0);
+				else
+					set_selection(selection+1);
+				continue;
+			default:
+				{
+					// let key be processed by selected menu-item
+					if(selected) {
+						MenuObject *entry = (*entries)[selection];
+						exit_loop = entry->handle_event(event);
+					}
+				}
+				break;
+			}
+#endif
 			} else if (event.type == SDL_QUIT) {
 				return -1;
 			}
 		}
+#ifdef GEKKO
+	if(mousecoords[0] || mousecoords[1])
+		move_mouse(mousecoords);
+#endif
 		if (mouse_updated) {
 			mouse->show();
 			mouse->blit_dirty();

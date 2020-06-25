@@ -51,6 +51,135 @@
 using std::cout;
 using std::endl;
 
+#ifdef GEKKO
+#include <wiiuse/wpad.h>
+
+/* Delay before held keys triggering */
+/* higher is the value, less responsive is the key update */
+#define HELD_DELAY 50
+
+/* Direction & selection update speed when a key is being held */
+/* lower is the value, faster is the key update */
+#define HELD_SPEED 20
+
+#define WPAD_BUTTONS_HELD (WPAD_BUTTON_UP | WPAD_BUTTON_DOWN | WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT | \
+		WPAD_CLASSIC_BUTTON_UP | WPAD_CLASSIC_BUTTON_DOWN | WPAD_CLASSIC_BUTTON_LEFT | WPAD_CLASSIC_BUTTON_RIGHT)
+
+#define PAD_BUTTONS_HELD  (PAD_BUTTON_UP | PAD_BUTTON_DOWN | PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)
+
+u16 MenuInput;
+
+/*-----------------------------------------------------------------------*/
+/**
+ * Menu inputs used in dialogs
+ */
+void wii_pad_update(void)
+{ 
+	static int held_cnt = 0;
+
+	/* PAD status update */
+	PAD_ScanPads();
+
+	/* PAD pressed keys */
+	s16 pp = PAD_ButtonsDown(0);
+
+	/* PAD held keys (direction/selection) */
+	s16 hp = PAD_ButtonsHeld(0) & PAD_BUTTONS_HELD;
+
+	/* WPAD status update */
+	WPAD_ScanPads();
+	WPADData *data = WPAD_Data(0);
+
+	/* WPAD pressed keys */
+	u32 pw = data->btns_d;
+
+	/* WPAD held keys (direction/selection) */
+	u32 hw = data->btns_h & WPAD_BUTTONS_HELD;
+
+	/* check if any direction/selection key is being held or just being pressed/released */
+	if (pp||pw) held_cnt = 0;
+	else if (hp||hw) held_cnt++;
+	else held_cnt = 0;
+		
+	/* initial delay (prevents triggering to start immediately) */
+	if (held_cnt > HELD_DELAY)
+	{
+		/* key triggering */
+		pp |= hp;
+		pw |= hw;
+
+		/* delay until next triggering (adjusts direction/selection update speed) */
+		held_cnt -= HELD_SPEED;
+	}
+
+	/* Wiimote & Classic Controller direction keys */
+	if(data->ir.valid)
+	{
+		/* Wiimote is handled vertically */
+		if (pw & (WPAD_BUTTON_UP))          pp |= PAD_BUTTON_UP;
+		else if (pw & (WPAD_BUTTON_DOWN))   pp |= PAD_BUTTON_DOWN;
+		else if (pw & (WPAD_BUTTON_LEFT))   pp |= PAD_BUTTON_LEFT;
+		else if (pw & (WPAD_BUTTON_RIGHT))  pp |= PAD_BUTTON_RIGHT;
+	}
+	else
+	{
+		/* Wiimote is handled horizontally */
+		if (pw & (WPAD_BUTTON_UP))          pp |= PAD_BUTTON_LEFT;
+		else if (pw & (WPAD_BUTTON_DOWN))   pp |= PAD_BUTTON_RIGHT;
+		else if (pw & (WPAD_BUTTON_LEFT))   pp |= PAD_BUTTON_DOWN;
+		else if (pw & (WPAD_BUTTON_RIGHT))  pp |= PAD_BUTTON_UP;
+	}
+
+	/* Classic Controller direction keys */
+	if (pw & WPAD_CLASSIC_BUTTON_UP)          pp |= PAD_BUTTON_UP;
+	else if (pw & WPAD_CLASSIC_BUTTON_DOWN)   pp |= PAD_BUTTON_DOWN;
+	else if (pw & WPAD_CLASSIC_BUTTON_LEFT)   pp |= PAD_BUTTON_LEFT;
+	else if (pw & WPAD_CLASSIC_BUTTON_RIGHT)  pp |= PAD_BUTTON_RIGHT;
+
+	/* Update menu inputs */
+	MenuInput = pp;
+}
+
+void wii_input_text()
+{
+	static int letter_index = 97;
+	SDLKey fakekey = static_cast<SDLKey>(letter_index);
+
+	if(MenuInput & PAD_BUTTON_UP)
+	{
+		push_keyboard(SDLK_BACKSPACE, true);
+		if(letter_index > 122)
+		{
+			letter_index = 97;
+		}
+		fakekey = static_cast<SDLKey>(letter_index);
+		push_keyboard(fakekey, true);
+		letter_index++;
+	}
+	else if(MenuInput & PAD_BUTTON_DOWN)
+	{
+		push_keyboard(SDLK_BACKSPACE, true);
+		if(letter_index < 97)
+		{
+			letter_index = 122;
+		}
+		fakekey = static_cast<SDLKey>(letter_index);
+		push_keyboard(fakekey, true);
+		letter_index--;
+	}
+	else if(MenuInput & PAD_BUTTON_LEFT)
+	{
+		push_keyboard(SDLK_BACKSPACE, true);
+	}
+	else if(MenuInput & PAD_BUTTON_RIGHT)
+	{
+		letter_index = 97;
+		fakekey = static_cast<SDLKey>(letter_index);
+		push_keyboard(fakekey, true);
+	}
+}
+#endif
+
 Gump_manager::Gump_manager()
 	: open_gumps(0), kbd_focus(0), non_persistent_count(0),
 	  modal_gump_count(0), right_click_close(true), dont_pause_game(false) {
@@ -451,11 +580,20 @@ int Gump_manager::handle_modal_gump_event(
 	//int scale_factor = gwin->get_fastmouse() ? 1
 	//          : gwin->get_win()->get_scale();
 	static bool rightclick;
-
 	int gx, gy;
 	Uint16 keysym_unicode = 0;
-
+#ifdef GEKKO
+	Sint16 mousecoords[2] = {0, 0};
+#endif
 	switch (event.type) {
+#ifdef GEKKO
+	case SDL_JOYBUTTONDOWN:
+	case SDL_JOYBUTTONUP:
+	case SDL_JOYAXISMOTION:
+		Wii_handle_event(&event, &mousecoords[0]);
+		break;
+#endif
+
 #ifdef UNDER_CE
 	case SDL_ACTIVEEVENT:
 		if ((event.active.state & SDL_APPACTIVE) && event.active.gain && minimized) {
@@ -559,11 +697,18 @@ int Gump_manager::handle_modal_gump_event(
 		keysym_unicode = event.key.keysym.unicode;
 #endif
 		gump->key_down(event.key.keysym.sym);
+#ifdef GEKKO
+		gump->text_input(event.key.keysym.sym, event.key.keysym.sym);
+#else
 		gump->text_input(event.key.keysym.sym, keysym_unicode);
-
+#endif
 		break;
 	}
 	}
+#ifdef GEKKO
+	if(mousecoords[0] || mousecoords[1])
+		push_mousemotion(mousecoords);
+#endif
 	return (1);
 }
 
@@ -582,7 +727,6 @@ int Gump_manager::do_modal_gump(
 	if (!modal_gump_count)
 		SDL_EnableUNICODE(1); // enable unicode translation for text input
 	modal_gump_count++;
-
 
 	//  Game_window *gwin = Game_window::get_instance();
 
@@ -613,6 +757,10 @@ int Gump_manager::do_modal_gump(
 		Delay();        // Wait a fraction of a second.
 		Mouse::mouse->hide();       // Turn off mouse.
 		Mouse::mouse_update = false;
+#ifdef GEKKO
+		wii_pad_update();
+		wii_input_text();
+#endif
 		SDL_Event event;
 		while (!escaped && !gump->is_done() && SDL_PollEvent(&event))
 			escaped = !handle_modal_gump_event(gump, event);
@@ -632,6 +780,7 @@ int Gump_manager::do_modal_gump(
 #ifdef __IPHONEOS__
 		gkeybb->paint();
 #endif
+
 	} while (!gump->is_done() && !escaped);
 	Mouse::mouse->hide();
 	remove_gump(gump);

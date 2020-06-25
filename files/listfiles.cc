@@ -173,6 +173,46 @@ int U7ListFiles(const std::string &mask, FileList &files) {
 
 	return 0;
 }
+#elif defined(GEKKO)
+#include <sys/param.h> // for MAXPATHLEN
+
+int U7ListFiles(const std::string &mask, FileList &files) {
+	string path(get_system_path(mask));
+	char dir_path[MAXPATHLEN];
+	char filename[MAXPATHLEN];
+	char ext[4];
+
+	File_SplitPath(path.c_str(), dir_path, filename, ext);
+
+	int count = 0;
+	int maxfiles = 1000;
+	struct dirent *dp = NULL;
+
+	/* Open directory */
+	DIR *dir = opendir(dir_path);
+	if (dir == NULL)
+	{
+		cerr << "U7ListFiles : Error opening" << dir_path << endl;
+		return 0;
+	}
+
+	/* list entries */
+	while ((dp=readdir(dir)) != NULL  && (count < maxfiles))
+	{
+		if (dp->d_name[0] == '.' && strcmp(dp->d_name, "..") != 0 )
+			continue;
+
+		if (strstr(dp->d_name, ext))
+		{
+			files.push_back(dp->d_name);
+		}
+	}
+
+	/* close directory */
+	closedir(dir);
+
+	return 0;
+}
 
 
 #else   // This system has glob.h

@@ -56,6 +56,18 @@
 #include <csignal>
 #endif
 
+#ifdef GEKKO
+#include <SDL.h>
+#include <stdio.h>
+#include <gccore.h>
+#include <ogcsys.h>
+#include <fat.h>
+#include <ogc/system.h>      // for syswd_t (required in ogc/usbstorage.h)
+#include <ogc/usbstorage.h>
+#include <sdcard/wiisd_io.h>
+#include <sys/param.h> // for MAXPATHLEN
+#endif
+
 #ifdef UNDER_CE
 #include <gx.h>
 #endif
@@ -175,6 +187,38 @@ clsTouchscreen *Touchscreen;
 #ifdef __IPHONEOS__
 KeyboardButton_gump *gkeybb;
 SDL_Joystick *sdl_joy;
+#endif
+#ifdef GEKKO
+#define MAX_AXIS_VALUE 32768
+#define AXIS_THRESHOLD (MAX_AXIS_VALUE - (MAX_AXIS_VALUE / 4))
+#define JOY_LEFT_VAL -16384
+#define JOY_RIGHT_VAL 16384
+#define JOY_UP_VAL -16384
+#define JOY_DOWN_VAL 16384
+
+// External SDL/libogc libraries functions
+extern "C" void __exception_setreload(int t);
+extern "C" void WII_ChangeSquare(int xscale, int yscale, int xshift, int yshift);
+extern "C" void WII_SetDefaultVideoMode();
+extern "C" void WII_SetDoubleStrikeVideoMode(int xscale, int yscale, int width);
+extern "C" void WII_SetFilter(bool b);
+
+char dolpath[MAXPATHLEN] = { 0 };
+int std_delay = 200; // Delay for joystick axis
+
+SDL_Joystick *sdlJoystick[5] =
+{
+	NULL, NULL, NULL, NULL, NULL
+};
+
+void get_memory()
+{
+	char memInfo[MAXPATHLEN];
+	float freemem1 = ((u32)SYS_GetArena1Hi()-(u32)SYS_GetArena1Lo())/1024/1024;
+	float freemem2 = ((u32)SYS_GetArena2Hi()-(u32)SYS_GetArena2Lo())/1024/1024;
+	sprintf(memInfo, "Memory Free:\n MEM1 %.2fMB\n MEM2 %.2fMB", freemem1, freemem2);
+	std::cout << memInfo << std::endl;
+}
 #endif
 bool g_waiting_for_click = false;
 ShortcutBar_gump *g_shortcutBar = NULL;
@@ -318,6 +362,33 @@ int main(
 	signal(SIGCHLD, sigchld_handler);
 #endif
 
+#ifdef GEKKO
+	__exception_setreload(8);
+	fatInitDefault();
+
+	if(argc > 0 && argv[0] != NULL)
+	{
+		char * argpath = strdup(argv[0]);
+		char filename[MAXPATHLEN];
+		File_SplitPath(argpath, dolpath, filename, NULL);
+	}
+
+	// Initialize fat device with a big cache to speed up loading times
+	fatUnmount ("sd:/");
+	__io_wiisd.shutdown ();
+	__io_wiisd.startup();
+	fatMount("sd", &__io_wiisd, 0, 16, 128);
+
+	// Redirect to log file
+	cleanup_output("std");
+	chdir(dolpath);
+	redirect_output("std");
+
+	for(int i = 0; i < argc; i++)
+		std::cout << "ARGV#" << i << ' ' << argv[0] << std::endl;
+	get_memory();
+#endif
+
 
 	bool    needhelp = false;
 	bool    showversion = false;
@@ -453,6 +524,12 @@ int main(
 		result = e.get_errno();
 	}
 
+#ifdef GEKKO
+	// close all devices
+	fatUnmount("sd");
+	fatUnmount("usb");
+	__io_wiisd.shutdown();
+#endif
 	return result;
 }
 
@@ -777,7 +854,11 @@ int exult_main(const char *runpath) {
 #ifdef __IPHONEOS__
 	gkeybb->autopaint = true;
 #endif
-
+#ifdef GEKKO
+	// TODO: 240p and bilinear filter as options(menu+cfg).
+	//WII_SetDoubleStrikeVideoMode(640, 240, 320);
+	//WII_SetFilter(true);
+#endif
 	int result = Play();        // start game
 
 #ifdef UNDER_CE
@@ -881,7 +962,8 @@ static void Init(
 	// SDL to use X11. Hence, we force the issue.
 	SDL_putenv(const_cast<char *>("SDL_VIDEODRIVER=x11"));
 #endif
-#ifdef __IPHONEOS__
+
+#if defined(__IPHONEOS__) || defined(GEKKO)
 	init_flags |= SDL_INIT_JOYSTICK;
 #endif
 	if (SDL_Init(init_flags) < 0) {
@@ -897,6 +979,14 @@ static void Init(
 	if (sdl_joy == NULL)
 		std::cout << "Error: could not open joystick" << std::endl;
 	std::cout << "joystick number of axis: " << SDL_JoystickNumAxes(sdl_joy) << ", number of hats: " << SDL_JoystickNumHats(sdl_joy) << ", number of balls: " << SDL_JoystickNumBalls(sdl_joy) << ", number of buttons: " << SDL_JoystickNumButtons(sdl_joy) << std::endl;
+
+#elif defined(GEKKO)
+	int nPadsConnected = SDL_NumJoysticks();
+	for (int i = 0; i < nPadsConnected && i < 5; i++)
+	{
+		// Open all found joysticks: 1st GameCube Pad is at index #4 in SDL-Wii
+		sdlJoystick[i] = SDL_JoystickOpen(i);
+	}
 #endif
 
 	SDL_SysWMinfo info;     // Get system info.
@@ -1329,7 +1419,6 @@ static void Handle_events(
 			gwin->blits = 0;
 		}
 #endif
-
 		SDL_Event event;
 		while (!quitting_time && SDL_PollEvent(&event))
 			Handle_event(event);
@@ -1346,6 +1435,7 @@ static void Handle_events(
 			int x, y;// Check for 'stuck' Avatar.
 			int ms = SDL_GetMouseState(&x, &y);
 			gwin->get_win()->screen_to_game(x, y, gwin->get_fastmouse(), x, y);
+
 			if ((SDL_BUTTON(3) & ms) && !right_on_gump)
 				gwin->start_actor(x, y,
 				                  Mouse::mouse->avatar_speed);
@@ -1435,6 +1525,188 @@ static void Handle_events(
 	}
 }
 
+#ifdef GEKKO
+void push_keyboard(SDLKey key, bool pressed)
+{
+	SDL_Event event;
+	event.type = pressed ? SDL_KEYDOWN : SDL_KEYUP;
+	event.key.type = pressed ? SDL_KEYDOWN : SDL_KEYUP;
+	event.key.state = pressed ? SDL_PRESSED : SDL_RELEASED;
+	event.key.keysym.scancode = 0;
+	event.key.keysym.sym = key;
+	event.key.keysym.unicode = event.key.keysym.sym;
+	event.key.keysym.mod = KMOD_NONE;
+
+	SDL_PushEvent(&event);
+}
+
+void push_mousemotion(Sint16 *mousecoords)
+{
+	int x, y;
+
+	SDL_GetMouseState(&x, &y);
+	int mouse_scale = 2;
+
+	/*if(abs(mousecoords[0]) >  AXIS_THRESHOLD || abs(mousecoords[1]) >  AXIS_THRESHOLD)
+		mouse_scale = 2;*/
+
+	x += mousecoords[0] / (3072 / mouse_scale);
+	y += mousecoords[1] / (3072 / mouse_scale);
+	if (x < 0)
+		x = 0;
+	if (y < 0)
+		y = 0;
+	SDL_WarpMouse(x, y);
+}
+
+void push_mousebutton(uint8 button, Sint32 x, Sint32 y, bool pressed)
+{
+	SDL_Event event;
+	event.type = pressed ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+	event.button.button = button;
+	event.button.x = x;
+	event.button.y = y;
+	SDL_PushEvent(&event);
+}
+
+int Wii_handle_event(SDL_Event *event, Sint16 *mousecoords)
+{
+	int speedx = 125;
+	int speedy = 125;
+	static int lastjoy = -1;
+	float ax, ay;
+	Uint8 oldhat = 0;
+
+	if(event->type == SDL_JOYBUTTONDOWN || event->type == SDL_JOYBUTTONUP)
+	{
+		int pad_active = WIIMOTE;
+		int mousex, mousey;
+		SDL_GetMouseState (&mousex, &mousey);
+
+		// In-game buttons
+		static const SDLKey buttons_to_keys[2][20] =
+		{
+			{SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_m, SDLK_t, SDLK_c, SDLK_ESCAPE, SDLK_ESCAPE, SDLK_UNKNOWN, SDLK_UNKNOWN, // Wiimote/Nunchuck controller
+			 SDLK_UNKNOWN, SDLK_ESCAPE, SDLK_m, SDLK_t, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN,        // Classic controller A->ZR
+			 SDLK_c, SDLK_ESCAPE, SDLK_ESCAPE},                                                                        // Classic controller Minus->Home
+			{SDLK_ESCAPE, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN},                                                   // GameCube controller TODO?
+		};
+
+		// Menu buttons. Just a few keys here. Save/load input text with dpad in gump_manager
+		static const SDLKey menubuttons_to_keys[2][20] =
+		{
+			{SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_1, SDLK_2, SDLK_LEFT, SDLK_RIGHT, SDLK_ESCAPE, SDLK_UNKNOWN, SDLK_UNKNOWN, // Wiimote/Nunchuck controller
+			 SDLK_UNKNOWN, SDLK_ESCAPE, SDLK_x, SDLK_y, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN,          // Classic controller A->ZR
+			 SDLK_c, SDLK_ESCAPE, SDLK_ESCAPE},                                                                          // Classic controller Minus->Home
+			{SDLK_ESCAPE, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN},                                                     // GameCube controller TODO?
+		};
+
+		if(event->jbutton.which == 0)
+			pad_active = WIIMOTE;
+		else if(event->jbutton.which == 4)
+			pad_active = GCPAD;
+
+		if(pad_active == WIIMOTE && event->jbutton.button == WII_BUTTON_A)
+			return 0;
+
+		if(pad_active == WIIMOTE && event->jbutton.button == CLASSIC_BUTTON_A)
+		{
+			push_mousebutton(SDL_BUTTON_LEFT, mousex, mousey, event->type==SDL_JOYBUTTONDOWN);
+			return 0;
+		}
+		else if(pad_active == WIIMOTE && event->jbutton.button == CLASSIC_BUTTON_B)
+		{
+			push_mousebutton(SDL_BUTTON_RIGHT, mousex, mousey, event->type==SDL_JOYBUTTONDOWN);
+			return 0;
+		}
+		else if(pad_active == WIIMOTE && event->jbutton.button == CLASSIC_BUTTON_ZR)
+		{
+			get_memory();
+			return 0;
+		}
+		else if(pad_active == GCPAD && event->jbutton.button == GC_BUTTON_A)
+		{
+			push_mousebutton(SDL_BUTTON_LEFT, mousex, mousey, event->type==SDL_JOYBUTTONDOWN);
+			return 0;
+		}
+		else if(pad_active == GCPAD && event->jbutton.button == GC_BUTTON_B)
+		{
+			push_mousebutton(SDL_BUTTON_RIGHT, mousex, mousey, event->type==SDL_JOYBUTTONDOWN);
+			return 0;
+		}
+ 
+		if(gwin->get_gump_man()->modal_gump_mode() )
+			push_keyboard(menubuttons_to_keys[pad_active][event->jbutton.button], event->type==SDL_JOYBUTTONDOWN);
+ 		else
+			push_keyboard(buttons_to_keys[pad_active][event->jbutton.button], event->type==SDL_JOYBUTTONDOWN);
+
+		return 0;
+	}
+	else if(event->type == SDL_JOYHATMOTION)
+	{		
+		for (int i=0; i < 4; i++) {
+			int mask = 1 << i;
+			if ((oldhat ^ event->jhat.value) & mask)
+			{
+				static const SDLKey hat_to_keys[4] =
+				{
+					SDLK_z,
+					SDLK_k,
+					SDLK_i,
+					SDLK_b
+				};
+				push_keyboard(hat_to_keys[i], (event->jhat.value&mask));
+			}
+		}
+		oldhat = event->jhat.value;
+	}
+	else if(event->type == SDL_JOYAXISMOTION)
+	{
+		// Left stick to move the character directly.
+		ax = SDL_JoystickGetAxis(sdlJoystick[event->jaxis.which], 0);
+		ay = SDL_JoystickGetAxis(sdlJoystick[event->jaxis.which], 1);
+
+		if(event->jaxis.axis==0 || event->jaxis.axis==1)
+		{
+			if(lastjoy == 0)
+			{
+				lastjoy = -1;
+				gwin->stop_actor();
+				return 0;
+			}
+
+			speedx = (abs(ax) >  AXIS_THRESHOLD) ? (std_delay/2) : std_delay;
+			speedy = (abs(ay) >  AXIS_THRESHOLD) ? (std_delay/2) : std_delay;
+
+			if (ax >= JOY_RIGHT_VAL) {
+				gwin->start_actor(gwin->get_width() / 2 + 50, gwin->get_height() / 2, speedx);
+				lastjoy = 1;
+			} else if (ax <= JOY_LEFT_VAL) {
+				gwin->start_actor(gwin->get_width() / 2 - 50, gwin->get_height() / 2, speedx);
+				lastjoy = 2;
+			} else if (ay <= JOY_UP_VAL) {
+				gwin->start_actor(gwin->get_width() / 2, gwin->get_height() / 2 - 50, speedy);
+				lastjoy = 3;
+			} else if (ay >= JOY_DOWN_VAL) {
+				gwin->start_actor(gwin->get_width() / 2, gwin->get_height() / 2 + 50, speedy);
+				lastjoy = 4;
+			}else {
+				lastjoy = 0;
+				return 0;
+			}
+		}
+		else if (event->jaxis.axis==2 || event->jaxis.axis==3)
+		{
+			// Right stick to move mouse cursor.
+			mousecoords[event->jaxis.axis - 2] = event->jaxis.value;
+		}
+		return 0;
+	}
+
+	return 0;
+}
+#endif
+
 /*
  *  Handle an event.  This should work for all platforms, and should only
  *  be called in 'normal' and 'gump' modes.
@@ -1443,7 +1715,6 @@ static void Handle_events(
 static void Handle_event(
     SDL_Event &event
 ) {
-
 	// Mouse scale factor
 	bool dont_move_mode = gwin->main_actor_dont_move();
 	bool avatar_can_act = gwin->main_actor_can_act();
@@ -1462,6 +1733,17 @@ static void Handle_event(
 #define JOY_DOWN_VAL -3000
 	float ax, ay;
 #endif
+
+#ifdef GEKKO
+	Sint16 mousecoords[2] = {0, 0};
+
+	int fps;
+	config->value("config/video/fps", fps, 5);
+	if (fps <= 0)
+		fps = 5;
+	std_delay = 1000 / fps;     // Convert to msecs. between frames.
+#endif
+
 	switch (event.type) {
 	case SDL_USEREVENT: {
 		if (!dragged) {
@@ -1478,6 +1760,14 @@ static void Handle_event(
 		dragging = dragged = false;
 		break;
 	}
+#ifdef GEKKO
+	case SDL_JOYBUTTONDOWN:
+	case SDL_JOYBUTTONUP:
+	case SDL_JOYHATMOTION:
+	case SDL_JOYAXISMOTION:
+		Wii_handle_event(&event, &mousecoords[0]);
+		break;
+#endif
 	case SDL_MOUSEBUTTONDOWN: {
 		if (dont_move_mode)
 			break;
@@ -1828,6 +2118,10 @@ static void Handle_event(
 		break;
 #endif
 	}
+#ifdef GEKKO
+	if(mousecoords[0] || mousecoords[1])
+		push_mousemotion(mousecoords);
+#endif
 }
 
 
@@ -1846,6 +2140,9 @@ static int Get_click(
 	dragging = false;       // Init.
 	uint32 last_rotate = 0;
 	g_waiting_for_click = true;
+	#ifdef GEKKO
+	Sint16 mousecoords[2] = {0, 0};
+	#endif
 	while (1) {
 		SDL_Event event;
 		Delay();        // Wait a fraction of a second.
@@ -1878,6 +2175,14 @@ static int Get_click(
 		static bool rightclick;
 		while (SDL_PollEvent(&event))
 			switch (event.type) {
+#ifdef GEKKO
+			case SDL_JOYBUTTONDOWN:
+			case SDL_JOYBUTTONUP:
+			case SDL_JOYHATMOTION:
+			case SDL_JOYAXISMOTION:
+				Wii_handle_event(&event, &mousecoords[0]);
+				break;
+#endif
 			case SDL_MOUSEBUTTONDOWN:
 #ifdef UNDER_CE
 				if (gkeyboard->handle_event(&event))
@@ -1888,6 +2193,7 @@ static int Get_click(
 				if (gkeybb->handle_event(&event))
 					break;
 #endif
+
 				if (g_shortcutBar && g_shortcutBar->handle_event(&event))
 					break;
 				if (event.button.button == 3)
@@ -2012,6 +2318,10 @@ static int Get_click(
 		if (!gwin->show() &&    // Blit to screen if necessary.
 		        Mouse::mouse_update)
 			Mouse::mouse->blit_dirty();
+#ifdef GEKKO
+	if(mousecoords[0] || mousecoords[1])
+		push_mousemotion(mousecoords);
+#endif
 	}
 	g_waiting_for_click = false;
 	return (0);         // Shouldn't get here.

@@ -56,6 +56,11 @@ using std::toupper;
 #include "iphone_gumps.h"
 #endif
 
+#ifdef GEKKO
+#include "exult.h"
+#include "Gump_manager.h"
+#endif
+
 SI_Game::SI_Game() {
 	if (!read_game_xml()) {
 		add_shape("gumps/check", 2);
@@ -1316,7 +1321,17 @@ bool SI_Game::new_game(Vga_file &shapes) {
 	const int max_len = 16;
 	char npc_name[max_len + 1];
 	char disp_name[max_len + 2];
+#ifdef GEKKO
+	npc_name[0] = 'A';
+	npc_name[1] = 'v';
+	npc_name[2] = 'a';
+	npc_name[3] = 't';
+	npc_name[4] = 'a';
+	npc_name[5] = 'r';
+	npc_name[6] = 0;
+#else
 	npc_name[0] = 0;
+#endif
 
 	int selected = 0;
 	int num_choices = 4;
@@ -1369,6 +1384,10 @@ bool SI_Game::new_game(Vga_file &shapes) {
 			gwin->get_win()->show();
 			redraw = false;
 		}
+#ifdef GEKKO
+		wii_pad_update();
+		wii_input_text();
+#endif
 		while (SDL_PollEvent(&event)) {
 #ifdef UNDER_CE
 			if (gkeyboard->handle_event(&event))
@@ -1377,6 +1396,110 @@ bool SI_Game::new_game(Vga_file &shapes) {
 #ifdef __IPHONEOS__
 			if (gkeybb->handle_event(&event))
 				redraw = true;
+#endif
+#ifdef GEKKO
+		if(event.type==SDL_JOYHATMOTION)
+		{
+			redraw = true;
+			switch(event.jhat.value) {
+			case SDL_HAT_LEFT:
+				if(selected==1)
+				{
+					skindata = Shapeinfo_lookup::GetPrevSelSkin(skindata, true, true);
+				}
+				break;
+			case SDL_HAT_RIGHT:
+				if(selected==1)
+				{
+					skindata = Shapeinfo_lookup::GetNextSelSkin(skindata, true, true);
+				}
+				break;
+			case SDL_HAT_DOWN:
+				if (selected != 0)
+				{
+					++selected;
+					if(selected==num_choices)
+						selected = 0;
+				}
+				break;
+			case SDL_HAT_UP:
+				if (selected != 0)
+				{
+					--selected;
+					if(selected<0)
+						selected = num_choices-1;
+				}
+				break;
+			default:
+				{
+					if (selected == 0) // on the text input field?
+					{
+						int len = strlen(npc_name);
+						char chr = 0;
+
+						if ((event.key.keysym.unicode & 0xFF80) == 0)
+							chr = event.key.keysym.unicode & 0x7F;
+
+						if (chr >= ' ' && len < max_len)
+						{
+							npc_name[len] = chr;
+							npc_name[len+1] = 0;
+						}
+					}
+					else
+					{
+						redraw = false;
+					}
+				}
+				break;
+			}
+		}
+
+		if(event.type==SDL_JOYBUTTONDOWN)
+		{
+			redraw = true;
+			switch(event.jbutton.button)
+			{
+
+			case WII_BUTTON_A:
+			case CLASSIC_BUTTON_A:
+				if(selected<2) 
+					++selected;
+				else if(selected==2)
+				{
+					editing=false;
+					ok = true;
+				}
+				else
+				{
+					editing = false;
+					ok = false;
+				}
+				break;
+			default:
+				{
+					if (selected == 0) // on the text input field?
+					{
+						int len = strlen(npc_name);
+						char chr = 0;
+
+						if ((event.key.keysym.unicode & 0xFF80) == 0)
+							chr = event.key.keysym.unicode & 0x7F;
+
+						if (chr >= ' ' && len < max_len)
+						{
+							npc_name[len] = chr;
+							npc_name[len+1] = 0;
+						}
+					}
+					else
+					{
+						redraw = false;
+					}
+				}
+				break;
+			}
+		}
 #endif
 			Uint16 keysym_unicode = 0;
 #if SDL_VERSION_ATLEAST(2, 0, 0)

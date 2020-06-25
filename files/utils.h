@@ -592,7 +592,7 @@ int U7mkdir(
     int mode
 );
 
-#ifdef WIN32
+#if defined(WIN32) || defined(GEKKO)
 void redirect_output(const char *prefix = "std");
 void cleanup_output(const char *prefix = "std");
 #endif
@@ -612,6 +612,11 @@ void U7copy(
 );
 
 #endif //UNDER_CE
+
+#ifdef GEKKO
+void File_SplitPath(const char *pSrcFileName, char *pDir, char *pName, char *pExt);
+extern char dolpath[];
+#endif
 
 bool is_system_path_defined(const std::string &key);
 void store_system_paths();

@@ -22,7 +22,10 @@
 #include <vector>
 #include <string>
 
+#ifdef GEKKO
+#else
 #include <vorbis/codec.h>
+#endif
 
 #include "common_types.h"
 

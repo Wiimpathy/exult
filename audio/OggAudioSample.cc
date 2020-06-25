@@ -167,8 +167,11 @@ uint32 OggAudioSample::decompressFrame(void *DecompData, void *samples) const
 	const int bigendianp = 1;
 #endif
 
-	long count = ov_read(&decomp->ov,reinterpret_cast<char*>(samples),frame_size,bigendianp,2,1,&decomp->bitstream);
-
+#ifdef GEKKO
+	int count = ov_read(&decomp->ov, reinterpret_cast<char*>(samples), frame_size, &decomp->bitstream);
+#else
+	long count = ov_read(&decomp->ov,static_cast<char*>(samples),frame_size,bigendianp,2,1,&decomp->bitstream);
+#endif
 	//if (count == OV_EINVAL || count == 0) {
 	if (count <= 0) return 0;
 	//else if (count < 0) {

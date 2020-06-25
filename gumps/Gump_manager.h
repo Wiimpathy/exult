@@ -105,4 +105,9 @@ private:
 	int handle_modal_gump_event(Modal_gump *gump, SDL_Event &event);
 };
 
+#ifdef GEKKO
+extern void	wii_pad_update();
+extern void	wii_input_text();
+#endif
+
 #endif // GUMP_MANAGER_INCLUDED

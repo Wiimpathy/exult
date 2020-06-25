@@ -571,6 +571,17 @@ int wait_delay(int ms, int startcol, int ncol, int rotspd) {
 					return 1;
 				}
 				break;
+#ifdef GEKKO
+			case SDL_JOYBUTTONDOWN:
+				switch (event.jbutton.button) {
+				case 0:
+					return 2;
+					break;
+				default:
+					return 1;
+				}
+				break;
+#endif
 			case SDL_MOUSEBUTTONDOWN:
 				break;
 			case SDL_MOUSEBUTTONUP:

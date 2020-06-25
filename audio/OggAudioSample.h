@@ -19,7 +19,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define OggAudioSample_H
 
 #include "AudioSample.h"
+#ifdef GEKKO
+#include <tremor/ivorbisfile.h>
+#else
 #include <vorbis/vorbisfile.h>
+#endif
 
 namespace Pentagram {
 

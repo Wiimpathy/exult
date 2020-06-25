@@ -1,0 +1,48 @@
+# Exult makefile for use with WII
+# based on the Be makefile
+
+CC   = $(DEVKITPPC)/bin/powerpc-eabi-g++
+CXX   = $(DEVKITPPC)/bin/powerpc-eabi-g++
+
+# Base of the exult source
+SRC=.
+
+### MT32Emu stuff
+MT32EMU_VERSION_MAJOR:=2
+MT32EMU_VERSION_MINOR:=0
+MT32EMU_VERSION_PATCH:=0
+MT32EMU_VERSION:=\"$(MT32EMU_VERSION_MAJOR).$(MT32EMU_VERSION_MINOR).$(MT32EMU_VERSION_PATCH)\"
+MT32EMU_CFLAGS:=-DMT32EMU_EXPORTS_TYPE=0 -DMT32EMU_API_TYPE=0 \
+			-DMT32EMU_VERSION_MAJOR=$(MT32EMU_VERSION_MAJOR) \
+			-DMT32EMU_VERSION_MINOR=$(MT32EMU_VERSION_MINOR) \
+			-DMT32EMU_VERSION_PATCH=$(MT32EMU_VERSION_PATCH) \
+			-DMT32EMU_VERSION=$(MT32EMU_VERSION)
+
+### Modify these paths
+SDL_CFLAGS=-I$(DEVKITPRO)/libogc/include -I$(DEVKITPRO)/libogc/include/SDL -g -D__BIG_ENDIAN__ -DGEKKO   -O2 -mrvl
+
+CPPFLAGS=-DVERSION=\"$(VERSION)\" -D_GNU_SOURCE -DEXULT_DATADIR=\"data\" -DNDEBUG -U__INT32_TYPE__ -U __UINT32_TYPE__ -D__INT32_TYPE__=int \
+	-DHAVE_PNG_H -DHAVE_FREETYPE2 -DSIZEOF_SHORT=2 -DSIZEOF_INT=4 -DSIZEOF_LONG=8 -DSIZEOF_INTP=4 -DEX_TYPE_INT16=short -DEX_TYPE_INT32=int \
+	-DHAVE_TR1_UNORDERED_MAP -DHAVE_TR1_UNORDERED_SET \
+	-I$(LIBOGC_INC) -I$(DEVKITPRO)/libogc/include/ogc/machine -I$(SRC)/headers -I$(SRC)/files/zip \
+	-I$(SRC) -I$(SRC)/gamemgr -I$(SRC)/imagewin -I$(SRC)/shapes -I$(SRC)/shapes/shapeinf -I$(SRC)/data -I$(SRC)/tools \
+	-I$(SRC)/files -I$(SRC) -I$(SRC)/audio -I$(SRC)/audio/midi_drivers -I$(SRC)/conf \
+	-I$(SRC)/gumps -I$(SRC)/objs -I$(SRC)/pathfinder -I$(SRC)/server -I$(SRC)/usecode \
+	-DHAVE_SNPRINTF  $(MT32EMU_CFLAGS) -std=gnu++14 $(SDL_CFLAGS) 
+CXXFLAGS=$(CPPFLAGS) -O2 -Wno-deprecated -Wno-long-long -std=gnu++14 -Wall 
+
+ifeq ($(WII_DEBUG), 1)
+	CPPFLAGS += -DWII_DEBUG
+	GBA_LIB=-lgba
+endif
+
+LDFLAGS ?=  -g  -mrvl 
+LIBS =  -L$(DEVKITPRO)/libogc/lib/wii -lSDL_ttf -lSDL_gfx -lSDL_image -lsmpeg -lSDL -lpng -ljpeg -lvorbisidec -logg -lfat -lwiiuse -lbte -laesnd -lz -logc -lm -lwiikeyboard
+
+EXEC=exult
+
+include Makefile.common
+
+expack:
+	@echo "Don't recompile expack!"
+
