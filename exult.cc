@@ -1586,8 +1586,8 @@ int Wii_handle_event(SDL_Event *event, Sint16 *mousecoords)
 		// In-game buttons
 		static const SDLKey buttons_to_keys[2][20] =
 		{
-			{SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_m, SDLK_t, SDLK_c, SDLK_ESCAPE, SDLK_ESCAPE, SDLK_UNKNOWN, SDLK_UNKNOWN, // Wiimote/Nunchuck controller
-			 SDLK_UNKNOWN, SDLK_ESCAPE, SDLK_m, SDLK_t, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN,        // Classic controller A->ZR
+			{SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_b, SDLK_m, SDLK_c, SDLK_ESCAPE, SDLK_ESCAPE, SDLK_UNKNOWN, SDLK_UNKNOWN, // Wiimote/Nunchuck controller
+			 SDLK_UNKNOWN, SDLK_ESCAPE, SDLK_b, SDLK_m, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN,        // Classic controller A->ZR
 			 SDLK_c, SDLK_ESCAPE, SDLK_ESCAPE},                                                                        // Classic controller Minus->Home
 			{SDLK_ESCAPE, SDLK_UNKNOWN, SDLK_UNKNOWN, SDLK_UNKNOWN},                                                   // GameCube controller TODO?
 		};
@@ -1648,12 +1648,13 @@ int Wii_handle_event(SDL_Event *event, Sint16 *mousecoords)
 			int mask = 1 << i;
 			if ((oldhat ^ event->jhat.value) & mask)
 			{
+				// Holding Wiimote vertically
 				static const SDLKey hat_to_keys[4] =
 				{
-					SDLK_z,
-					SDLK_k,
-					SDLK_i,
-					SDLK_b
+					SDLK_i, // Right
+					SDLK_t, // Down
+					SDLK_z, // Left
+					SDLK_k  // Up
 				};
 				push_keyboard(hat_to_keys[i], (event->jhat.value&mask));
 			}
