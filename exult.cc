@@ -366,18 +366,35 @@ int main(
 	__exception_setreload(8);
 	fatInitDefault();
 
-	if(argc > 0 && argv[0] != NULL)
-	{
-		char * argpath = strdup(argv[0]);
-		char filename[MAXPATHLEN];
-		File_SplitPath(argpath, dolpath, filename, NULL);
-	}
-
 	// Initialize fat device with a big cache to speed up loading times
-	fatUnmount ("sd:/");
+	fatUnmount("sd:/");
+	fatUnmount("usb:/");
+
 	__io_wiisd.shutdown ();
 	__io_wiisd.startup();
 	fatMount("sd", &__io_wiisd, 0, 16, 128);
+
+	__io_usbstorage.shutdown();
+	__io_usbstorage.startup();
+	fatMount("usb", &__io_usbstorage, 0, 16, 128);
+	sleep(1);
+
+	// Get the base path
+	if(argc > 0 && argv[0] != NULL)
+	{
+		// path sent by the 1st plugin's argument(WiiFlow etc.)
+		if(argc > 1 && (strstr(argv[1], "usb") ||  strstr(argv[1], "sd:")) )
+		{
+			snprintf(dolpath, sizeof(dolpath), argv[1]);
+		}
+		// path from the dol itself. Probably launched from Homebrew Channel or similar.
+		else
+		{
+			char * argpath = strdup(argv[0]);
+			char filename[MAXPATHLEN];
+			File_SplitPath(argpath, dolpath, filename, NULL);
+		}
+	}
 
 	// Redirect to log file
 	cleanup_output("std");
@@ -385,7 +402,9 @@ int main(
 	redirect_output("std");
 
 	for(int i = 0; i < argc; i++)
-		std::cout << "ARGV#" << i << ' ' << argv[0] << std::endl;
+		std::cout << "ARGV#" << i << ' ' << argv[i] << std::endl;
+
+	std::cout << "dolpath: " << dolpath << std::endl;
 	get_memory();
 #endif
 
